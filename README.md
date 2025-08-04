@@ -7,6 +7,8 @@ I modified it to support IntelliJ 12.x since one of my IntelliJ plugins wasn't b
 
 All credit goes to original authors of the maven plugin.
 
+Kaixuan: Added the support for JavaFX support by adding loadJreExtJars/additionalClasspath params.
+
 Usage
 -----
 

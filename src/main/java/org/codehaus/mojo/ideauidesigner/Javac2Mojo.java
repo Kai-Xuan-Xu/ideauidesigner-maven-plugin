@@ -29,8 +29,10 @@ import org.apache.tools.ant.types.Path;
 import com.intellij.uiDesigner.ant.Javac2;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.Collection;
+import java.util.jar.JarFile;
 
 /**
  * Generates the Java sources from the *.form files.
@@ -120,6 +122,20 @@ public class Javac2Mojo
      */
     private boolean verbose;
 
+    /**
+     * If add the jars in ext folder to the classpath
+     *
+     * @parameter expression="${loadJreExtJars}" default-value="false"
+     */
+    private boolean loadJreExtJars;
+
+    /**
+     * Add additional path to the classpath
+     *
+     * @parameter expression="${additionalClasspath}" default-value=""
+     */
+    private String additionalClasspath;
+
     public void execute()
         throws MojoExecutionException
     {
@@ -152,6 +168,23 @@ public class Javac2Mojo
             classpath.createPathElement().setLocation( artifact.getFile() );
         }
 
+        // By default, this plugin will not load the jars under jre/lib/ext.
+        if (loadJreExtJars) {
+            getLog().info(" ======== Start to add the jre ext jars to classpath ======== ");
+            String javaHome = System.getProperty("java.home");
+            getLog().info("Java_Home is : " + javaHome);
+            if (javaHome != null && javaHome.length() != 0) {
+                String extLibPath = javaHome + File.separator + "lib" + File.separator + "ext";
+                addJarsUnderPathToClasspath(classpath, extLibPath);
+            }
+        }
+
+        if (additionalClasspath != null && additionalClasspath.trim().length() > 0) {
+            getLog().info(" ======== Start to add the additional jars under " + additionalClasspath + " to classpath ======== ");
+            addJarsUnderPathToClasspath(classpath, additionalClasspath);
+        }
+
+
         classpath.createPathElement().setLocation( destDirectory );
 
         getLog().debug( "created classpath:" + classpath );
@@ -182,6 +215,60 @@ public class Javac2Mojo
         {
             throw new MojoExecutionException( "command execution failed", e );
         }
+    }
+
+    private void addJarsUnderPathToClasspath(Path classpath, String extLibPath) {
+        File extLibDir = new File(extLibPath);
+
+        if (! extLibDir.exists()) {
+            return;
+        }
+
+        if (extLibDir.isDirectory()) {
+            addJarsUnderDirToClasspath(classpath, extLibDir);
+        } else {
+            if (isJar(extLibPath)) {
+                classpath.createPathElement().setLocation(new File(extLibPath));
+                getLog().debug("Add lib in ext folder to classpath : " + extLibPath);
+            }
+        }
+
+    }
+
+    private void addJarsUnderDirToClasspath(Path classpath, File extLibDir) {
+        String[] filePaths = extLibDir.list();
+
+        if (filePaths == null) {
+            return;
+        }
+
+        for (String filePath : filePaths) {
+            String absolutePath = extLibDir.getAbsolutePath() + File.separator + filePath;
+            if (new File(absolutePath).isDirectory()) {
+                addJarsUnderDirToClasspath(classpath, new File(absolutePath));
+            }
+
+            if (! isJar(absolutePath)) {
+                continue;
+            }
+
+            classpath.createPathElement().setLocation(new File(absolutePath));
+            getLog().debug("Add lib in ext folder to classpath : " + absolutePath);
+        }
+    }
+
+    private boolean isJar(String filePath) {
+        if (! filePath.toLowerCase().contains(".jar")) {
+            return false;
+        }
+
+        try {
+            new JarFile(filePath);
+        } catch (IOException e) {
+            return false;
+        }
+
+        return true;
     }
 
     private class DebugAntBuildListener implements BuildListener {
